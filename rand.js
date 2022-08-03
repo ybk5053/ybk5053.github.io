@@ -113,6 +113,9 @@ function spin() {
 
 function importdata() {
     let data = window.prompt("Enter copied storage (will overwrite storage)", "")
+    if (data === "{}") {
+        window.localStorage.clear()
+    }
     try {
         data = JSON.parse(data)
         Object.keys(data).forEach(function (k) {
