@@ -1,37 +1,12 @@
 <!doctype html>
 <html>
     <head>
-        <title>YYKKYY.TK</title>
-        <script type="text/javascript" src="rand.js"></script>
+        <title>YYKKYY</title>
     </head>
     <body style="color: #eee; background: #121212;">
-        <h1>Random</h1>
-        <div style="width: 50%; max-width: 300px; border-style: groove; border-radius: 5px;">
-            <h2>Your Lists</h2>
-            <div>
-                <button type="button" style="font-size:10px;" onclick="exportdata()">Copy local storage</button>
-                <button type="button" style="font-size:10px;" onclick="importdata()">Import local storage</button>
-            </div>
-            <ul id="wheel"></ul>
-        </div>
+        <h1><a href="/random">Random</a></h1>
         <br>
-        <div style="width: 50%; max-width: 300px; border-style: groove; border-radius: 5px; margin-right: 10px;">
-            <h3>Name Your List:</h3>
-            <input type="text" id="title">
-            <h3>Items:</h3>
-            <ol id="items"></ol>
-            <input type="text" id="newitem">
-            <button type="button" id="new" onclick="additem()">Add!</button>
-            <br><br>
-            <button type="button" id="save" onclick="savewheel()" style="margin-bottom: 10px;">Save List</button>
-        </div>
-        <br><br>
-        <div>
-            <button type="button" id="spin" style="font-size:25px;" disabled onclick="spin()">CLICK TO SPIN</button>
-        </div>
-        <script>
-            activatespin()
-            loadwheels()
-        </script>
+        <h1><a href="/maze">Maze</a></h1>
+        <br>
     </body>
 </html>
