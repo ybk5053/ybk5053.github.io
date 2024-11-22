@@ -7,6 +7,9 @@
     </head>
     <body>
         <h1>Maze</h1>
+        <p>
+            This is a maze generator. Use the arrow keys to move around the maze and reach the goal(indicated by red walls).
+        </p>
         <div style="float: left;">
             <p>
                 <input type="button" id="new" value="New" style="font-size: large;" onclick="newmaze()">
@@ -24,23 +27,23 @@
                 <input type="checkbox" id="map">
             </p>
             <center>
-                <p>
-                    <b id="up" style="font-size: 50px;">
+                <p style="font-size: 50px; background-color: gray;">
+                    <b id="up" style="cursor: pointer;">
                         &uarr;
                     </b>
                 </p>
             </center>
             <center>
-                <p style="font-size: 50px;">
-                    <b id="left">
+                <p style="font-size: 50px; background-color: gray;">
+                    <b id="left" style="cursor: pointer;">
                         &larr;
                     </b>
                     &nbsp;&nbsp;
-                    <b id="down">
+                    <b id="down" style="cursor: pointer;">
                         &darr;
                     </b>
                     &nbsp;&nbsp;
-                    <b id="right">
+                    <b id="right" style="cursor: pointer;">
                         &rarr;
                     </b>
                 </p>

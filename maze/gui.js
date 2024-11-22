@@ -313,6 +313,6 @@ class GUI {
         this.ctx.beginPath()
         this.ctx.font = "30px Arial";
         this.ctx.fillStyle = "black"
-        this.ctx.fillText("Congrats",this.ctx.canvas.width/2,this.ctx.canvas.height/2)
+        this.ctx.fillText("Congrats",this.ctx.canvas.width/2-50,this.ctx.canvas.height/2-50)
     }
 }
