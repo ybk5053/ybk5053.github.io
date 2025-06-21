@@ -53,7 +53,7 @@
             <canvas id="viewcanvas" width="800" height="800"></canvas>
         </div>
         <div>
-            <canvas id="mapcanvas" width="200" height="200"></canvas>
+            <canvas id="mapcanvas" width="200" height="300"></canvas>
         </div>
         <script>
             function newmaze() {
@@ -75,7 +75,7 @@
                     w = window.innerWidth
                 }
                 canvas.width = w
-                canvas.height = w
+                canvas.height = w/2*3
                 gui.draw_view()
             }
             window.addEventListener("resize", resize)
