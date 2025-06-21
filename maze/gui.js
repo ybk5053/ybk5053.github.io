@@ -28,6 +28,16 @@ class GUI {
 
         this.canvas = document.getElementById("viewcanvas")
         this.ctx = this.canvas.getContext("2d")
+        var wall = new Image();
+        wall.src = "wood.jpg";
+        let canvas1 = document.createElement( 'canvas' );
+        let ctx1 = canvas1.getContext( '2d' );
+        canvas1.width = 64
+        canvas1.height = 64
+        ctx1.drawImage( wall, 0, 0, 512, 512, 0, 0, canvas1.width, canvas1.height );
+        let pattern = this.ctx.createPattern(canvas1, "repeat")
+        this.wallcol = [pattern, pattern, pattern, pattern, 'red', 'orange']
+        
         document.addEventListener('keyup', this.key)
         this.mapcanvas = document.getElementById("mapcanvas")
         this.mapctx = this.mapcanvas.getContext("2d")
@@ -137,7 +147,7 @@ class GUI {
         if (ignore != 'l') {
             if (this.maze.get_cell(position)[left(face)]) {
                 polygon.push(new Polygon([width*leftx, 0, width*startx, 0, width*startx, width*floory, width*leftx, width*neary], l, layer, side))
-                polygon.push(new Polygon([width*(leftx-0.01), 0, width*leftx, 0, width*leftx, width*neary, width*(leftx-0.01), width*neary], 'black', layer, side))
+                polygon.push(new Polygon([width*(leftx-xwallthick), 0, width*leftx, 0, width*leftx, width*neary, width*(leftx-xwallthick), width*neary], 'black', layer, side))
             } else {
                 polygon.push(...this.draw_layer(this.maze.get_adj_cell_pos(left(face),position), face, width, floory, neary, startx-endx+startx, startx, startx+0.05, startx-endx+startx-0.05, startx, 'r', layer, side+1))
             }
@@ -145,7 +155,7 @@ class GUI {
         if (ignore != 'r') {
             if (this.maze.get_cell(position)[right(face)]) {
                 polygon.push(new Polygon([width*rightx, 0, width*endx, 0, width*endx, width*floory, width*rightx, width*neary], r, layer, side))
-                polygon.push(new Polygon([width*rightx, 0, width*(rightx+0.01), 0, width*(rightx+0.01), width*neary, width*rightx, width*neary], 'black', layer, side))
+                polygon.push(new Polygon([width*rightx, 0, width*(rightx+xwallthick), 0, width*(rightx+xwallthick), width*neary, width*rightx, width*neary], 'black', layer, side))
             } else {
                 polygon.push(...this.draw_layer(this.maze.get_adj_cell_pos(right(face),position), face, width, floory, neary, endx, endx+endx-startx, endx+endx-startx+0.05, endx-0.05, endx, 'l', layer, side+1))
             }
