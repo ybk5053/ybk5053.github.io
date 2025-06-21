@@ -79,8 +79,12 @@
                 gui.draw_view()
             }
             window.addEventListener("resize", resize)
-            newmaze()
-            resize()
+            var wall = new Image()
+            wall.onload = function() { 
+                newmaze(); 
+                resize();
+            }
+            wall.src = "wall.jpg"
         </script>
     </body>
 </html>
