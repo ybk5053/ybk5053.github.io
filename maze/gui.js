@@ -120,8 +120,12 @@ class GUI {
         if (this.maze.get_cell(position)[face]) {
             polygon.push(new Polygon([width*startx, 0, width*endx, 0, width*endx, width*floory, width*startx, width*floory], u, layer, side))
             if (ignore != '') {
-                polygon.push(new Polygon([width*startx, 0, width*(startx-xwallthick), 0, width*(startx-xwallthick), width*(floory-ywallthick), width*startx, width*floory], r, layer, side))
-                polygon.push(new Polygon([width*endx, 0, width*(endx+xwallthick), 0, width*(endx+xwallthick), width*(floory-ywallthick), width*endx, width*floory], l, layer, side))
+                if (!this.maze.get_cell(position)[left(face)]) {
+                    polygon.push(new Polygon([width*startx, 0, width*(startx-xwallthick), 0, width*(startx-xwallthick), width*(floory-ywallthick), width*startx, width*floory], r, layer, side))
+                }
+                if (!this.maze.get_cell(position)[right(face)]) {
+                    polygon.push(new Polygon([width*endx, 0, width*(endx+xwallthick), 0, width*(endx+xwallthick), width*(floory-ywallthick), width*endx, width*floory], l, layer, side))
+                }
             }
         } else if (ignore == 'r') {
             polygon.push(...this.draw_layer(this.maze.get_adj_cell_pos(face,position), face, width, floory-ystep, floory, startx+0.05, endx+0.05, endx, startx, limit, ignore, layer+1, side))
