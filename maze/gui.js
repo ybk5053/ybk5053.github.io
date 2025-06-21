@@ -65,7 +65,7 @@ class GUI {
     draw_view() {
         this.ctx.clearRect(0,0,this.ctx.canvas.width, this.ctx.canvas.height)
         this.ctx.beginPath()
-        this.ctx.fillStyle = "white"
+        this.ctx.fillStyle = "grey"
         this.ctx.fillRect(0,0,this.ctx.canvas.width, this.ctx.canvas.height)
         var width = this.canvas.width
         var polygons = this.draw_layer(this.maze.player.position(), this.maze.player.face, width, 0.95, 1.0, 0.025, 0.975, 1.0, 0.0, 0.5)
