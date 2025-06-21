@@ -28,8 +28,6 @@ class GUI {
 
         this.canvas = document.getElementById("viewcanvas")
         this.ctx = this.canvas.getContext("2d")
-        var wall = new Image();
-        wall.src = "wall.jpg";
         let canvas1 = document.createElement( 'canvas' );
         let ctx1 = canvas1.getContext( '2d' );
         canvas1.width = 64
