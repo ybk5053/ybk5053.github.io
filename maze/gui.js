@@ -68,7 +68,7 @@ class GUI {
             this.ctx.fillStyle = p.col
             this.ctx.lineWidth = "1"
             this.ctx.strokeStyle = "black"
-            this.ctx.moveTo(p.cord[0], [1])
+            this.ctx.moveTo(p.cord[0], p.cord[1])
             this.ctx.lineTo(p.cord[2], p.cord[3])
             this.ctx.lineTo(p.cord[4], p.cord[5])
             this.ctx.lineTo(p.cord[6], p.cord[7])
