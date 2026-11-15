@@ -275,7 +275,7 @@
 
     /* ---------------- Sudoku reading ---------------- */
 
-    const N = 2;          // grid size
+    const N = 6;          // grid size
     const BOX_R = 2;      // box shape: 2 rows x 3 columns
     const BOX_C = 3;      // box shape: 2 rows x 3 columns
     const S = 600;        // size of rectified grid image
@@ -325,10 +325,10 @@
 
     function buildTemplates() {
       if (templates) return templates;
-      const fonts = ['Arial'];
-      // const fonts = ['Arial', 'Helvetica', 'Verdana', 'Tahoma', 'Georgia', 'Times New Roman', 'Courier New', 'sans-serif', 'serif', 'monospace'];
-      const weights = ['normal'];
-      // const weights = ['normal', 'bold'];
+      // const fonts = ['Arial'];
+      const fonts = ['Arial', 'Helvetica', 'Verdana', 'Tahoma', 'Georgia', 'Times New Roman', 'Courier New', 'sans-serif', 'serif', 'monospace'];
+      // const weights = ['normal'];
+      const weights = ['normal', 'bold'];
       templates = {};
       for (let d = 1; d <= N; d++) {
         templates[d] = [];
