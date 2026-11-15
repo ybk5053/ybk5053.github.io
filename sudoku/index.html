@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>6x6 Sudoku Reader</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 24px 16px;
+      text-align: center;
+      background: #fafafa;
+      color: #222;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    button {
+      font-size: 1rem;
+      padding: 12px 20px;
+      border: 0;
+      border-radius: 8px;
+      background: #2563eb;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: #64748b;
+    }
+
+    button.go {
+      background: #16a34a;
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    #camera {
+      display: none;
+      margin-bottom: 20px;
+    }
+
+    video,
+    #preview {
+      max-width: 100%;
+      border-radius: 10px;
+      background: #000;
+    }
+
+    #preview {
+      background: transparent;
+      display: none;
+      margin: 0 auto 16px;
+    }
+
+    #status {
+      min-height: 1.4em;
+      margin: 8px 0;
+      font-weight: 500;
+    }
+
+    #status.error {
+      color: #b91c1c;
+    }
+
+    #status.ok {
+      color: #15803d;
+    }
+
+    #status.warn {
+      color: #b45309;
+    }
+
+    #result {
+      display: none;
+      margin-top: 16px;
+    }
+
+    table.grid {
+      border-collapse: collapse;
+      margin: 12px auto;
+      background: #fff;
+    }
+
+    table.grid td {
+      width: 48px;
+      height: 48px;
+      text-align: center;
+      font-size: 1.5rem;
+      border: 1px solid #94a3b8;
+    }
+
+    table.grid td.given {
+      font-weight: 700;
+    }
+
+    table.grid td.unknown {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    /* 2 rows x 3 columns boxes */
+    table.grid tr:nth-child(2n) td {
+      border-bottom: 3px solid #1e293b;
+    }
+
+    table.grid tr:first-child td {
+      border-top: 3px solid #1e293b;
+    }
+
+    table.grid td:nth-child(3n) {
+      border-right: 3px solid #1e293b;
+    }
+
+    table.grid td:first-child {
+      border-left: 3px solid #1e293b;
+    }
+
+    #warped {
+      max-width: 240px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      display: none;
+    }
+
+    pre {
+      text-align: left;
+      background: #f1f5f9;
+      padding: 10px;
+      border-radius: 8px;
+      overflow: auto;
+      font-size: .85rem;
+    }
+
+    #json {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>6×6 Sudoku Solver</h1>
+
+  <div class="buttons">
+    <button id="takeBtn">📷 Take photo</button>
+    <button id="uploadBtn" class="secondary">🖼️ Upload photo</button>
+  </div>
+
+  <div id="camera">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="buttons" style="margin-top:12px">
+      <button id="snapBtn">Capture</button>
+      <button id="cancelBtn" class="secondary">Cancel</button>
+    </div>
+  </div>
+
+  <img id="preview" alt="Selected photo">
+
+  <div class="buttons">
+    <button id="readBtn" class="go" style="display:none" disabled>🔍 Read 6×6 Sudoku</button>
+  </div>
+
+  <p id="status">Loading OpenCV.js…</p>
+
+  <div id="result">
+    <table class="grid" id="gridTable"></table>
+    <div><canvas id="warped"></canvas></div>
+    <pre id="json"></pre>
+  </div>
+
+  <input type="file" id="fileInput" accept="image/*" hidden>
+  <input type="file" id="captureInput" accept="image/*" capture="environment" hidden>
+  <canvas id="canvas" hidden></canvas>
+
+  <script async src="opencv.js" onload="onOpenCvReady()" onerror="cvFailed()"></script>
+  <script>
+    const $ = id => document.getElementById(id);
+    const video = $('video');
+    const canvas = $('canvas');
+    const preview = $('preview');
+    const statusEl = $('status');
+    const cameraBox = $('camera');
+    const readBtn = $('readBtn');
+    let stream = null;
+
+    function setStatus(text, kind) {
+      statusEl.textContent = text;
+      statusEl.className = kind || '';
+    }
+
+    function scrollDown() {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    }
+
+    /* ---------------- Photo input (camera / upload) ---------------- */
+
+    function showImage(src) {
+      preview.src = src;
+      preview.style.display = 'block';
+      readBtn.style.display = '';
+      $('result').style.display = 'none';
+      setStatus(cvIsReady ? 'Photo loaded. Press "Read 6×6 Sudoku".' : 'Loading OpenCV.js…');
+      scrollDown()
+    }
+
+    function showFile(file) {
+      if (!file || !file.type.startsWith('image/')) {
+        setStatus('Please choose an image file.', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = e => showImage(e.target.result);
+      reader.readAsDataURL(file);
+    }
+
+    function stopCamera() {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      stream = null; video.srcObject = null; cameraBox.style.display = 'none';
+    }
+
+    $('takeBtn').addEventListener('click', async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        $('captureInput').click();
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        video.srcObject = stream;
+        cameraBox.style.display = 'block';
+      } catch (err) {
+        setStatus('Could not access the camera (' + err.name + '). Trying the device camera picker…', 'warn');
+        $('captureInput').click();
+      }
+    });
+
+    $('snapBtn').addEventListener('click', () => {
+      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      showImage(canvas.toDataURL('image/jpeg', 0.92));
+      stopCamera();
+    });
+    $('cancelBtn').addEventListener('click', stopCamera);
+    $('uploadBtn').addEventListener('click', () => $('fileInput').click());
+    $('fileInput').addEventListener('change', e => { showFile(e.target.files[0]); e.target.value = ''; });
+    $('captureInput').addEventListener('change', e => { showFile(e.target.files[0]); e.target.value = ''; });
+
+    /* ---------------- OpenCV.js loading ---------------- */
+
+    let cvIsReady = false;
+    async function cvFailed() {
+      setStatus('Could not load OpenCV.js (check your internet connection).', 'error');
+    }
+
+    async function onOpenCvReady() {
+      cvIsReady = true;
+      readBtn.disabled = false;
+      if (preview.style.display === 'block') {
+        setStatus('Photo loaded. Press "Read 6×6 Sudoku".');
+      } else {
+        setStatus('Take or upload a photo of a 6×6 sudoku.');
+      }
+    }
+
+    /* ---------------- Sudoku reading ---------------- */
+
+    const N = 2;          // grid size
+    const BOX_R = 2;      // box shape: 2 rows x 3 columns
+    const BOX_C = 3;      // box shape: 2 rows x 3 columns
+    const S = 600;        // size of rectified grid image
+    class SudokuError extends Error { }
+
+    // ---- digit templates (rendered from system fonts, digits 1..N) ----
+    let templates = null;
+
+    function featureFromBinary(bin) {            // bin: CV_8UC1, white digit on black
+      const rect = cv.boundingRect(bin);
+      if (rect.width === 0 || rect.height === 0) {
+        return null;
+      }
+      console.log(rect)
+      const crop = bin.roi(rect);
+      const scale = 20 / Math.max(rect.width, rect.height);
+      const w = Math.max(1, Math.round(rect.width * scale));
+      const h = Math.max(1, Math.round(rect.height * scale));
+      const small = new cv.Mat();
+      cv.resize(crop, small, new cv.Size(w, h), 0, 0, cv.INTER_AREA);
+      const out = cv.Mat.zeros(28, 28, cv.CV_8UC1);
+      const dst = out.roi(new cv.Rect(Math.floor((28 - w) / 2), Math.floor((28 - h) / 2), w, h));
+      small.copyTo(dst);
+      cv.GaussianBlur(out, out, new cv.Size(3, 3), 0);
+      const vec = new Float32Array(28 * 28);
+      let mean = 0;
+      for (let i = 0; i < vec.length; i++) {
+        vec[i] = out.data[i];
+        mean += vec[i];
+      }
+      mean /= vec.length;
+      let norm = 0;
+      for (let i = 0; i < vec.length; i++) {
+        vec[i] -= mean;
+        norm += vec[i] * vec[i];
+      }
+      norm = Math.sqrt(norm) || 1;
+      for (let i = 0; i < vec.length; i++) {
+        vec[i] /= norm;
+      }
+      crop.delete();
+      small.delete();
+      dst.delete();
+      out.delete();
+      return vec;
+    }
+
+    function buildTemplates() {
+      if (templates) return templates;
+      const fonts = ['Arial'];
+      // const fonts = ['Arial', 'Helvetica', 'Verdana', 'Tahoma', 'Georgia', 'Times New Roman', 'Courier New', 'sans-serif', 'serif', 'monospace'];
+      const weights = ['normal'];
+      // const weights = ['normal', 'bold'];
+      templates = {};
+      for (let d = 1; d <= N; d++) {
+        templates[d] = [];
+        for (const font of fonts) {
+          for (const weight of weights) {
+            const c = document.createElement('canvas');
+            c.width = c.height = 160;
+            const g = c.getContext('2d');
+            g.fillStyle = '#000';
+            g.fillRect(0, 0, 160, 160);
+            g.fillStyle = '#fff';
+            g.font = `${weight} 110px "${font}", sans-serif`;
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.fillText(String(d), 80, 86);
+            const rgba = cv.matFromImageData(g.getImageData(0, 0, 160, 160));
+            const gray = new cv.Mat();
+            cv.cvtColor(rgba, gray, cv.COLOR_RGBA2GRAY);
+            cv.threshold(gray, gray, 128, 255, cv.THRESH_BINARY);
+            const v = featureFromBinary(gray);
+            if (v) {
+              templates[d].push(v);
+            }
+            rgba.delete();
+            gray.delete();
+          }
+        }
+      }
+      return templates;
+    }
+
+    function classifyDigit(vec) {
+      let best = 0, bestScore = -2;
+      for (let d = 1; d <= N; d++) {
+        for (const t of templates[d]) {
+          let s = 0;
+          for (let i = 0; i < vec.length; i++) s += vec[i] * t[i];
+          if (s > bestScore) { bestScore = s; best = d; }
+        }
+      }
+      return { digit: best, score: bestScore };
+    }
+
+    // ---- geometry helpers ----
+    function orderCorners(p) {
+      const sum = q => q.x + q.y, diff = q => q.x - q.y;
+      const tl = p.reduce((a, b) => sum(b) < sum(a) ? b : a);
+      const br = p.reduce((a, b) => sum(b) > sum(a) ? b : a);
+      const tr = p.reduce((a, b) => diff(b) > diff(a) ? b : a);
+      const bl = p.reduce((a, b) => diff(b) < diff(a) ? b : a);
+      return [tl, tr, br, bl];
+    }
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+    // Groups consecutive indices whose count >= threshold; returns group centres.
+    function findLineCentres(counts, threshold, gap = 3) {
+      const centres = [];
+      let start = -1, last = -1;
+      for (let i = 0; i <= counts.length; i++) {
+        const on = i < counts.length && counts[i] >= threshold;
+        if (on) { if (start < 0) start = i; last = i; }
+        else if (start >= 0 && i - last > gap) { centres.push((start + last) / 2); start = -1; }
+      }
+      return centres;
+    }
+
+    async function readSudoku() {
+      if (!preview.complete || !preview.naturalWidth) {
+        await preview.decode();
+      }
+      buildTemplates();
+
+      const mats = [];
+      const track = m => (mats.push(m), m);
+
+      try {
+        // 1. Draw the photo (max 1000px) onto a canvas and load into OpenCV
+        const scale = Math.min(1, 1000 / Math.max(preview.naturalWidth, preview.naturalHeight));
+        const c = document.createElement('canvas');
+        c.width = Math.round(preview.naturalWidth * scale);
+        c.height = Math.round(preview.naturalHeight * scale);
+        c.getContext('2d').drawImage(preview, 0, 0, c.width, c.height);
+        const src = track(cv.imread(c));
+
+        // 2. Find the largest convex quadrilateral (the puzzle outline)
+        const gray = track(new cv.Mat());
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        const blur = track(new cv.Mat());
+        cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+        const thr = track(new cv.Mat());
+        cv.adaptiveThreshold(blur, thr, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
+        const k3 = track(cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3)));
+        cv.dilate(thr, thr, k3);
+
+        const contours = track(new cv.MatVector());
+        const hier = track(new cv.Mat());
+        cv.findContours(thr, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+        const imgArea = c.width * c.height;
+        let bestArea = 0, bestPts = null;
+        for (let i = 0; i < contours.size(); i++) {
+          const cnt = contours.get(i);
+          const area = cv.contourArea(cnt);
+          if (area > 0.1 * imgArea && area > bestArea) {
+            const approx = new cv.Mat();
+            cv.approxPolyDP(cnt, approx, 0.02 * cv.arcLength(cnt, true), true);
+            if (approx.rows === 4 && cv.isContourConvex(approx)) {
+              bestArea = area;
+              bestPts = [0, 1, 2, 3].map(j => ({ x: approx.data32S[j * 2], y: approx.data32S[j * 2 + 1] }));
+            }
+            approx.delete();
+          }
+          cnt.delete();
+        }
+        if (!bestPts) throw new SudokuError('Not a sudoku puzzle: no square grid outline found in the photo.');
+
+        const [tl, tr, br, bl] = orderCorners(bestPts);
+        const wTop = dist(tl, tr), wBot = dist(bl, br), hL = dist(tl, bl), hR = dist(tr, br);
+        const ratio = ((wTop + wBot) / 2) / ((hL + hR) / 2);
+        if (ratio < 0.6 || ratio > 1.67) throw new SudokuError('Not a sudoku puzzle: the detected grid is not square.');
+
+        // 3. Rectify the grid to S x S
+        const srcTri = track(cv.matFromArray(4, 1, cv.CV_32FC2, [tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y]));
+        const dstTri = track(cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, S, 0, S, S, 0, S]));
+        const M = track(cv.getPerspectiveTransform(srcTri, dstTri));
+        const warped = track(new cv.Mat());
+        cv.warpPerspective(gray, warped, M, new cv.Size(S, S), cv.INTER_LINEAR, cv.BORDER_REPLICATE);
+        cv.imshow('warped', warped);
+
+        const bin = track(new cv.Mat());
+        cv.adaptiveThreshold(warped, bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 25, 10);
+
+        // 4. Detect grid lines with long morphological kernels
+        const hKernel = track(cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(150, 1)));
+        const vKernel = track(cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(1, 150)));
+        const hMask = track(new cv.Mat()), vMask = track(new cv.Mat());
+        cv.morphologyEx(bin, hMask, cv.MORPH_OPEN, hKernel);
+        cv.morphologyEx(bin, vMask, cv.MORPH_OPEN, vKernel);
+
+        const rowCounts = new Array(S).fill(0), colCounts = new Array(S).fill(0);
+        for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+          if (hMask.data[y * S + x]) rowCounts[y]++;
+          if (vMask.data[y * S + x]) colCounts[x]++;
+        }
+        const inner = v => v > 0.05 * S && v < 0.95 * S;
+        const hLines = findLineCentres(rowCounts, 0.5 * S).filter(inner);
+        const vLines = findLineCentres(colCounts, 0.5 * S).filter(inner);
+
+        if (hLines.length === 0 && vLines.length === 0)
+          throw new SudokuError('Not a sudoku puzzle: no grid lines found inside the outline.');
+        if (hLines.length !== N - 1 || vLines.length !== N - 1)
+          throw new SudokuError(`Not a 6×6 sudoku: found a ${hLines.length + 1}×${vLines.length + 1} grid (rows × columns).`);
+        for (let k = 1; k < N; k++) {
+          const expected = k * S / N;
+          if (Math.abs(hLines[k - 1] - expected) > 0.06 * S || Math.abs(vLines[k - 1] - expected) > 0.06 * S)
+            throw new SudokuError('Not a 6×6 sudoku: the grid lines are not evenly spaced.');
+        }
+
+        // 5. Remove grid lines, leaving only digits
+        const lines = track(new cv.Mat());
+        cv.bitwise_or(hMask, vMask, lines);
+        const k5 = track(cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5)));
+        cv.dilate(lines, lines, k5);
+        const notLines = track(new cv.Mat());
+        cv.bitwise_not(lines, notLines);
+        const digitsBin = track(new cv.Mat());
+        cv.bitwise_and(bin, notLines, digitsBin);
+
+        // 6. Read each cell
+        const xs = [0, ...vLines, S], ys = [0, ...hLines, S];
+        const grid = [], unreadable = [];
+        for (let r = 0; r < N; r++) {
+          const row = [];
+          for (let col = 0; col < N; col++) {
+            const mx = Math.round((xs[col + 1] - xs[col]) * 0.1), my = Math.round((ys[r + 1] - ys[r]) * 0.1);
+            const rect = new cv.Rect(Math.round(xs[col]) + mx, Math.round(ys[r]) + my,
+              Math.round(xs[col + 1] - xs[col]) - 2 * mx, Math.round(ys[r + 1] - ys[r]) - 2 * my);
+            const cell = digitsBin.roi(rect);
+            const work = cell.clone();
+            const cs = new cv.MatVector(), h2 = new cv.Mat();
+            cv.findContours(work, cs, h2, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+            let maxArea = 0, box = null;
+            for (let i = 0; i < cs.size(); i++) {
+              const cnt = cs.get(i);
+              const a = cv.contourArea(cnt);
+              if (a > maxArea) { maxArea = a; box = cv.boundingRect(cnt); }
+              cnt.delete();
+            }
+            let value = 0;
+            if (box && maxArea >= 0.012 * rect.width * rect.height && box.height >= 0.25 * rect.height) {
+              const digitMat = cell.roi(box);
+              const vec = featureFromBinary(digitMat);
+              digitMat.delete();
+              const { digit, score } = vec ? classifyDigit(vec) : { digit: 0, score: -1 };
+              if (score >= 0.45) value = digit; else { value = -1; unreadable.push([r + 1, col + 1]); }
+            }
+            row.push(value);
+            cell.delete(); work.delete(); cs.delete(); h2.delete();
+          }
+          grid.push(row);
+        }
+
+        const givens = grid.flat().filter(v => v !== 0).length;
+        if (givens === 0) throw new SudokuError('Not a sudoku puzzle: the 6×6 grid has no digits in it.');
+
+        // 7. Check for conflicts among the givens (rows, columns, 2×3 boxes)
+        const conflicts = [];
+        const seen = {};
+        for (let r = 0; r < N; r++) for (let col = 0; col < N; col++) {
+          const v = grid[r][col];
+          if (v <= 0) continue;
+          const keys = [`r${r}-${v}`, `c${col}-${v}`, `b${Math.floor(r / BOX_R)}${Math.floor(col / BOX_C)}-${v}`];
+          for (const k of keys) {
+            if (seen[k]) conflicts.push(`${v} at row ${r + 1}, col ${col + 1}`);
+            seen[k] = true;
+          }
+        }
+
+        return { grid, unreadable, conflicts: [...new Set(conflicts)] };
+      } finally {
+        mats.forEach(m => { try { m.delete(); } catch (e) { } });
+      }
+    }
+
+    function renderGrid(grid, unreadable) {
+      const table = $('gridTable');
+      table.innerHTML = '';
+      for (const row of grid) {
+        const tr = document.createElement('tr');
+        for (const v of row) {
+          const td = document.createElement('td');
+          if (v > 0) { td.textContent = v; td.className = 'given'; }
+          else if (v < 0) { td.textContent = '?'; td.className = 'unknown'; }
+          tr.appendChild(td);
+        }
+        table.appendChild(tr);
+      }
+      const clean = grid.map(r => r.map(v => Math.max(v, 0)));   // 0 = empty
+      $('json').textContent = JSON.stringify(clean);
+      window.sudokuGrid = clean;       // 6x6 array, 0 = empty cell
+      $('result').style.display = 'block';
+    }
+
+    readBtn.addEventListener('click', async () => {
+      readBtn.disabled = true;
+      $('result').style.display = 'none';
+      setStatus('Reading…');
+      try {
+        const { grid, unreadable, conflicts } = await readSudoku();
+        renderGrid(grid, unreadable);
+        const warnings = [];
+        if (unreadable.length) warnings.push('Could not read ' + unreadable.map(([r, c]) => `(row ${r}, col ${c})`).join(', ') + ' (shown as ?).');
+        if (conflicts.length) warnings.push('Some digits conflict, so they may be misread: ' + conflicts.join('; ') + '.');
+        if (warnings.length) setStatus('6×6 grid found. ' + warnings.join(' '), 'warn');
+        else setStatus('6×6 sudoku read successfully.', 'ok');
+      } catch (err) {
+        $('result').style.display = 'none';
+        setStatus(err instanceof SudokuError ? err.message : 'Error: ' + (err.message || err), 'error');
+        console.error(err);
+      } finally {
+        readBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+
+</html>
