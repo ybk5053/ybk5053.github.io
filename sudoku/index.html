@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>6x6 Sudoku Reader</title>
+  <title>6x6 Sudoku Solver</title>
   <style>
     body {
       font-family: system-ui, sans-serif;
@@ -132,7 +132,6 @@
       max-width: 240px;
       border-radius: 6px;
       border: 1px solid #cbd5e1;
-      display: none;
     }
 
     pre {
@@ -154,8 +153,8 @@
   <h1>6×6 Sudoku Solver</h1>
 
   <div class="buttons">
-    <button id="takeBtn">📷 Take photo</button>
-    <button id="uploadBtn" class="secondary">🖼️ Upload photo</button>
+    <button id="takeBtn" disabled>📷 Take photo</button>
+    <button id="uploadBtn" class="secondary" disabled>🖼️ Upload photo</button>
   </div>
 
   <div id="camera">
@@ -168,13 +167,12 @@
 
   <img id="preview" alt="Selected photo">
 
-  <div class="buttons">
-    <button id="readBtn" class="go" style="display:none" disabled>🔍 Read 6×6 Sudoku</button>
-  </div>
-
   <p id="status">Loading OpenCV.js…</p>
 
   <div id="result">
+    <div class="buttons" style="margin-bottom:0">
+      <button id="solveBtn" class="go">🧩 Solve</button>
+    </div>
     <table class="grid" id="gridTable"></table>
     <div><canvas id="warped"></canvas></div>
     <pre id="json"></pre>
@@ -192,7 +190,6 @@
     const preview = $('preview');
     const statusEl = $('status');
     const cameraBox = $('camera');
-    const readBtn = $('readBtn');
     let stream = null;
 
     function setStatus(text, kind) {
@@ -206,13 +203,11 @@
 
     /* ---------------- Photo input (camera / upload) ---------------- */
 
-    function showImage(src) {
+    async function showImage(src) {
       preview.src = src;
-      preview.style.display = 'block';
-      readBtn.style.display = '';
       $('result').style.display = 'none';
       setStatus(cvIsReady ? 'Photo loaded. Press "Read 6×6 Sudoku".' : 'Loading OpenCV.js…');
-      scrollDown()
+      await readImage()
     }
 
     function showFile(file) {
@@ -265,7 +260,8 @@
 
     async function onOpenCvReady() {
       cvIsReady = true;
-      readBtn.disabled = false;
+      $('takeBtn').disabled = false;
+      $('uploadBtn').disabled = false;
       if (preview.style.display === 'block') {
         setStatus('Photo loaded. Press "Read 6×6 Sudoku".');
       } else {
@@ -289,7 +285,6 @@
       if (rect.width === 0 || rect.height === 0) {
         return null;
       }
-      console.log(rect)
       const crop = bin.roi(rect);
       const scale = 20 / Math.max(rect.width, rect.height);
       const w = Math.max(1, Math.round(rect.width * scale));
@@ -381,7 +376,9 @@
       const bl = p.reduce((a, b) => diff(b) < diff(a) ? b : a);
       return [tl, tr, br, bl];
     }
-    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
 
     // Groups consecutive indices whose count >= threshold; returns group centres.
     function findLineCentres(counts, threshold, gap = 3) {
@@ -389,8 +386,15 @@
       let start = -1, last = -1;
       for (let i = 0; i <= counts.length; i++) {
         const on = i < counts.length && counts[i] >= threshold;
-        if (on) { if (start < 0) start = i; last = i; }
-        else if (start >= 0 && i - last > gap) { centres.push((start + last) / 2); start = -1; }
+        if (on) {
+          if (start < 0) {
+            start = i;
+            last = i;
+          }
+        } else if (start >= 0 && i - last > gap) {
+          centres.push((start + last) / 2);
+          start = -1;
+        }
       }
       return centres;
     }
@@ -402,7 +406,10 @@
       buildTemplates();
 
       const mats = [];
-      const track = m => (mats.push(m), m);
+      function track(m) {
+        mats.push(m);
+        return m;
+      }
 
       try {
         // 1. Draw the photo (max 1000px) onto a canvas and load into OpenCV
@@ -421,7 +428,8 @@
         const thr = track(new cv.Mat());
         cv.adaptiveThreshold(blur, thr, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
         const k3 = track(cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3)));
-        cv.dilate(thr, thr, k3);
+        cv.morphologyEx(thr, thr, cv.MORPH_OPEN, k3);
+        cv.morphologyEx(thr, thr, cv.MORPH_CLOSE, k3);
 
         const contours = track(new cv.MatVector());
         const hier = track(new cv.Mat());
@@ -443,12 +451,19 @@
           }
           cnt.delete();
         }
-        if (!bestPts) throw new SudokuError('Not a sudoku puzzle: no square grid outline found in the photo.');
+        if (!bestPts) {
+          throw new SudokuError('Not a sudoku puzzle: no square grid outline found in the photo.');
+        }
 
         const [tl, tr, br, bl] = orderCorners(bestPts);
-        const wTop = dist(tl, tr), wBot = dist(bl, br), hL = dist(tl, bl), hR = dist(tr, br);
+        const wTop = dist(tl, tr);
+        const wBot = dist(bl, br);
+        const hL = dist(tl, bl);
+        const hR = dist(tr, br);
         const ratio = ((wTop + wBot) / 2) / ((hL + hR) / 2);
-        if (ratio < 0.6 || ratio > 1.67) throw new SudokuError('Not a sudoku puzzle: the detected grid is not square.');
+        if (ratio < 0.6 || ratio > 1.67) {
+          throw new SudokuError('Unable to detect square grid.');
+        }
 
         // 3. Rectify the grid to S x S
         const srcTri = track(cv.matFromArray(4, 1, cv.CV_32FC2, [tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y]));
@@ -464,14 +479,45 @@
         // 4. Detect grid lines with long morphological kernels
         const hKernel = track(cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(150, 1)));
         const vKernel = track(cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(1, 150)));
-        const hMask = track(new cv.Mat()), vMask = track(new cv.Mat());
+        const hMask = track(new cv.Mat());
+        const vMask = track(new cv.Mat());
+        const gLine = track(new cv.Mat());
         cv.morphologyEx(bin, hMask, cv.MORPH_OPEN, hKernel);
         cv.morphologyEx(bin, vMask, cv.MORPH_OPEN, vKernel);
+        cv.HoughLines(bin, gLine, 1, Math.PI / 180, 300)
+        for (let i = 0; i < gLine.rows; ++i) {
+          let rho = gLine.data32F[i * 2];
+          let theta = gLine.data32F[i * 2 + 1];
+          if (theta > 1.55 && theta < 1.60) {
+            let a = Math.cos(theta);
+            let b = Math.sin(theta);
+            let x0 = a * rho;
+            let y0 = b * rho;
+            let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
+            let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
+            cv.line(hMask, startPoint, endPoint, [255, 0, 0, 255]);
+          }
+          if (theta < 0.03 && theta < 3.11) {
+            let a = Math.cos(theta);
+            let b = Math.sin(theta);
+            let x0 = a * rho;
+            let y0 = b * rho;
+            let startPoint = { x: x0 - 1000 * b, y: y0 + 1000 * a };
+            let endPoint = { x: x0 + 1000 * b, y: y0 - 1000 * a };
+            cv.line(vMask, startPoint, endPoint, [255, 0, 0, 255]);
+          }
+        }
 
         const rowCounts = new Array(S).fill(0), colCounts = new Array(S).fill(0);
-        for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-          if (hMask.data[y * S + x]) rowCounts[y]++;
-          if (vMask.data[y * S + x]) colCounts[x]++;
+        for (let y = 0; y < S; y++) {
+          for (let x = 0; x < S; x++) {
+            if (hMask.data[y * S + x]) {
+              rowCounts[y]++;
+            }
+            if (vMask.data[y * S + x]) {
+              colCounts[x]++;
+            }
+          }
         }
         const inner = v => v > 0.05 * S && v < 0.95 * S;
         const hLines = findLineCentres(rowCounts, 0.5 * S).filter(inner);
@@ -483,8 +529,9 @@
           throw new SudokuError(`Not a 6×6 sudoku: found a ${hLines.length + 1}×${vLines.length + 1} grid (rows × columns).`);
         for (let k = 1; k < N; k++) {
           const expected = k * S / N;
-          if (Math.abs(hLines[k - 1] - expected) > 0.06 * S || Math.abs(vLines[k - 1] - expected) > 0.06 * S)
+          if (Math.abs(hLines[k - 1] - expected) > 0.06 * S || Math.abs(vLines[k - 1] - expected) > 0.06 * S) {
             throw new SudokuError('Not a 6×6 sudoku: the grid lines are not evenly spaced.');
+          }
         }
 
         // 5. Remove grid lines, leaving only digits
@@ -498,8 +545,10 @@
         cv.bitwise_and(bin, notLines, digitsBin);
 
         // 6. Read each cell
-        const xs = [0, ...vLines, S], ys = [0, ...hLines, S];
-        const grid = [], unreadable = [];
+        const xs = [0, ...vLines, S];
+        const ys = [0, ...hLines, S];
+        const grid = [];
+        const unreadable = [];
         for (let r = 0; r < N; r++) {
           const row = [];
           for (let col = 0; col < N; col++) {
@@ -560,8 +609,14 @@
         const tr = document.createElement('tr');
         for (const v of row) {
           const td = document.createElement('td');
-          if (v > 0) { td.textContent = v; td.className = 'given'; }
-          else if (v < 0) { td.textContent = '?'; td.className = 'unknown'; }
+          td.contentEditable = true;
+          if (v > 0) {
+            td.textContent = v;
+            td.className = 'given';
+          } else if (v < 0) {
+            td.textContent = '?';
+            td.className = 'unknown';
+          }
           tr.appendChild(td);
         }
         table.appendChild(tr);
@@ -572,13 +627,11 @@
       $('result').style.display = 'block';
     }
 
-    readBtn.addEventListener('click', async () => {
-      readBtn.disabled = true;
-      $('result').style.display = 'none';
-      setStatus('Reading…');
+    async function readImage() {
       try {
         const { grid, unreadable, conflicts } = await readSudoku();
         renderGrid(grid, unreadable);
+        console.log(grid)
         const warnings = [];
         if (unreadable.length) warnings.push('Could not read ' + unreadable.map(([r, c]) => `(row ${r}, col ${c})`).join(', ') + ' (shown as ?).');
         if (conflicts.length) warnings.push('Some digits conflict, so they may be misread: ' + conflicts.join('; ') + '.');
@@ -588,9 +641,99 @@
         $('result').style.display = 'none';
         setStatus(err instanceof SudokuError ? err.message : 'Error: ' + (err.message || err), 'error');
         console.error(err);
-      } finally {
-        readBtn.disabled = false;
       }
+    }
+
+
+    /* ---------------- Solver ---------------- */
+
+    // Backtracking solver (picks the empty cell with the fewest candidates).
+    // Returns the first solution and how many solutions exist, up to `limit`.
+    function solveGrid(givens, limit = 2) {
+      const a = givens.map(r => r.slice());
+      const ok = (r, c, v) => {
+        for (let i = 0; i < N; i++) if (a[r][i] === v || a[i][c] === v) return false;
+        const br = r - (r % BOX_R), bc = c - (c % BOX_C);
+        for (let i = 0; i < BOX_R; i++) for (let j = 0; j < BOX_C; j++) if (a[br + i][bc + j] === v) return false;
+        return true;
+      };
+      // the given digits must not conflict with each other
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+        const v = a[r][c];
+        if (v) { a[r][c] = 0; const fine = ok(r, c, v); a[r][c] = v; if (!fine) return { solution: null, count: 0 }; }
+      }
+      let count = 0, first = null;
+      (function rec() {
+        let br = -1, bc = -1, list = null, best = N + 1;
+        for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+          if (a[r][c] !== 0) continue;
+          const cands = [];
+          for (let v = 1; v <= N; v++) if (ok(r, c, v)) cands.push(v);
+          if (cands.length < best) { best = cands.length; br = r; bc = c; list = cands; }
+          if (best === 0) return;
+        }
+        if (br < 0) { count++; if (!first) first = a.map(r => r.slice()); return; }
+        for (const v of list) {
+          a[br][bc] = v;
+          rec();
+          a[br][bc] = 0;
+          if (count >= limit) return;
+        }
+      })();
+      return { solution: first, count };
+    }
+
+    function renderSolved(original, solution) {
+      const table = $('gridTable');
+      table.innerHTML = '';
+      for (let r = 0; r < N; r++) {
+        const tr = document.createElement('tr');
+        for (let c = 0; c < N; c++) {
+          const td = document.createElement('td');
+          td.textContent = solution[r][c];
+          td.className = original[r][c] > 0 ? 'given' : 'solved';
+          tr.appendChild(td);
+        }
+        table.appendChild(tr);
+      }
+      $('json').textContent = JSON.stringify(solution);
+      window.sudokuSolution = solution;
+    }
+
+    function readGrid() {
+      const grid = [];
+      const table = $('gridTable');
+      for (const row of table.rows) {
+        const tr = []
+        for (const cell of row.cells) {
+          if (cell.textContent === '') {
+            tr.push(0)
+          } else {
+            tr.push(parseInt(cell.textContent, 10))
+          }
+        }
+        grid.push(tr)
+      }
+      return grid
+    }
+
+    $('solveBtn').addEventListener('click', () => {
+      const grid = readGrid()
+      console.log(grid)
+      const unreadable = [];
+      grid.forEach((row, r) => row.forEach((v, c) => { if (v < 0) unreadable.push(`(row ${r + 1}, col ${c + 1})`); }));
+      if (unreadable.length) {
+        setStatus('Cannot solve: could not read ' + unreadable.join(', ') + '. Retake the photo with better lighting.', 'error');
+        return;
+      }
+      const givens = grid.map(r => r.slice());
+      const { solution, count } = solveGrid(givens);
+      if (!solution) {
+        setStatus('No solution exists. A digit was probably misread, or the puzzle is invalid.', 'error');
+        return;
+      }
+      renderSolved(givens, solution);
+      setStatus(count > 1 ? 'Solved (the puzzle has more than one solution; showing one).' : 'Solved! Original digits are bold, solved digits are blue.', count > 1 ? 'warn' : 'ok');
     });
   </script>
 </body>
