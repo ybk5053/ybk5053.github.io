@@ -415,10 +415,17 @@
         // 1. Draw the photo (max 1000px) onto a canvas and load into OpenCV
         const scale = Math.min(1, 1000 / Math.max(preview.naturalWidth, preview.naturalHeight));
         const c = document.createElement('canvas');
-        c.width = Math.round(preview.naturalWidth * scale);
-        c.height = Math.round(preview.naturalHeight * scale);
+        c.width = preview.naturalWidth;
+        c.height = preview.naturalHeight;
+        const cwidth = Math.round(preview.naturalWidth * scale;
+        const cheight = Math.round(preview.naturalHeight * scale);
         c.getContext('2d').drawImage(preview, 0, 0, c.width, c.height);
-        const src = track(cv.imread(c));
+        const ori = cv.imread(c);
+        c.width = 0;
+        c.height = 0;
+        const src = track(new cv.Mat());
+        cv.resize(ori, src, new cv.Size(cwidth, cheight). 0, 0, cv.INTER_AREA);
+        ori.delete();
 
         // 2. Find the largest convex quadrilateral (the puzzle outline)
         const gray = track(new cv.Mat());
@@ -435,7 +442,7 @@
         const hier = track(new cv.Mat());
         cv.findContours(thr, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-        const imgArea = c.width * c.height;
+        const imgArea = cwidth * cheight;
         let bestArea = 0, bestPts = null;
         for (let i = 0; i < contours.size(); i++) {
           const cnt = contours.get(i);
