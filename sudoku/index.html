@@ -6,6 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>6x6 Sudoku Solver</title>
   <style>
+    :root {
+      --size: 64px;
+      --thickness: 6px;
+      --track: #e5e7eb;
+      --accent: #4f46e5;
+      --speed: 0.9s;
+    }
+    
     body {
       font-family: system-ui, sans-serif;
       max-width: 640px;
@@ -15,6 +23,29 @@
       background: #fafafa;
       color: #222;
     }
+
+    .spinner {
+      width: var(--size);
+      height: var(--size);
+      box-sizing: border-box;
+      border: var(--thickness) solid var(--track);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin var(--speed) linear infinite;
+      display: none;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .spinner {
+        animation-duration: 2.5s;
+      }
 
     .buttons {
       display: flex;
@@ -156,6 +187,8 @@
     <button id="takeBtn" disabled>📷 Take photo</button>
     <button id="uploadBtn" class="secondary" disabled>🖼️ Upload photo</button>
   </div>
+
+  <div class="spinner" role="status" aria-label="Loading"></div>
 
   <div id="camera">
     <video id="video" autoplay playsinline muted></video>
@@ -417,14 +450,14 @@
         const c = document.createElement('canvas');
         c.width = preview.naturalWidth;
         c.height = preview.naturalHeight;
-        const cwidth = Math.round(preview.naturalWidth * scale;
+        const cwidth = Math.round(preview.naturalWidth * scale);
         const cheight = Math.round(preview.naturalHeight * scale);
         c.getContext('2d').drawImage(preview, 0, 0, c.width, c.height);
         const ori = cv.imread(c);
         c.width = 0;
         c.height = 0;
         const src = track(new cv.Mat());
-        cv.resize(ori, src, new cv.Size(cwidth, cheight). 0, 0, cv.INTER_AREA);
+        cv.resize(ori, src, new cv.Size(cwidth, cheight), 0, 0, cv.INTER_AREA);
         ori.delete();
 
         // 2. Find the largest convex quadrilateral (the puzzle outline)
