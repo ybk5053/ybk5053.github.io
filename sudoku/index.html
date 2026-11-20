@@ -224,6 +224,7 @@
     const preview = $('preview');
     const statusEl = $('status');
     const cameraBox = $('camera');
+    const spinner = $('spinner');
     let stream = null;
 
     function setStatus(text, kind) {
@@ -773,8 +774,13 @@
         setStatus('No solution exists. A digit was probably misread, or the puzzle is invalid.', 'error');
         return;
       }
-      renderSolved(givens, solution);
-      setStatus(count > 1 ? 'Solved (the puzzle has more than one solution; showing one).' : 'Solved! Original digits are bold, solved digits are blue.', count > 1 ? 'warn' : 'ok');
+      spinner.style.display = "block";
+      setStatus('Solving puzzle. Be patient.');
+      setTimeout(() => {
+        spinner.style.display = "";
+        renderSolved(givens, solution);
+        setStatus(count > 1 ? 'Solved (the puzzle has more than one solution; showing one).' : 'Solved! Original digits are bold, solved digits are blue.', count > 1 ? 'warn' : 'ok');
+      }, 45000);
     });
   </script>
 </body>
