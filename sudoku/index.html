@@ -216,7 +216,7 @@
   <input type="file" id="captureInput" accept="image/*" capture="environment" hidden>
   <canvas id="canvas" hidden></canvas>
 
-  <script async src="opencv.js" onload="onOpenCvReady()" onerror="cvFailed()"></script>
+  <script async src="https://unpkg.com/@techstark/opencv-js@5.0.0-release.1/dist/opencv.js" onload="onOpenCvReady()" onerror="cvFailed()"></script>
   <script>
     const $ = id => document.getElementById(id);
     const video = $('video');
