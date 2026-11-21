@@ -673,7 +673,6 @@
       try {
         const { grid, unreadable, conflicts } = await readSudoku();
         renderGrid(grid, unreadable);
-        console.log(grid)
         const warnings = [];
         if (unreadable.length) warnings.push('Could not read ' + unreadable.map(([r, c]) => `(row ${r}, col ${c})`).join(', ') + ' (shown as ?).');
         if (conflicts.length) warnings.push('Some digits conflict, so they may be misread: ' + conflicts.join('; ') + '.');
@@ -761,7 +760,6 @@
 
     $('solveBtn').addEventListener('click', () => {
       const grid = readGrid()
-      console.log(grid)
       const unreadable = [];
       grid.forEach((row, r) => row.forEach((v, c) => { if (v < 0) unreadable.push(`(row ${r + 1}, col ${c + 1})`); }));
       if (unreadable.length) {
